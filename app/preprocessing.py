@@ -34,5 +34,10 @@ def lemma(tokens, language_model):
 
     return [token.lemma_ for token in doc]
 
-def preprocess(text: str) -> list[str]:
-    return lemma(stopword_removal(regex_text(text), stopwords), lang_model)
+def preprocess(text: str, remove_stopwords: bool = True) -> list[str]:
+    text = regex_text(text)
+
+    if remove_stopwords == True:
+        stopword_removal(text, stopwords)
+
+    return lemma(text , lang_model)
