@@ -12,8 +12,4 @@ from preprocessing import preprocess
 print(preprocess("it's ya boi, big mjørkurion, here with u <3"))
 
 # --- GUI? ---
-from gui import IR_GUI
-
-app = IR_GUI()
-
-app.mainloop()
+# Swapping out CustomTKinter for TTKBootStrap
