@@ -5,7 +5,7 @@ class IR_GUI(ttk.Window):
     def __init__(self,
                  title: str = None,
                  themename: str = "default",
-                 size: str = "800x600",
+                 size: str = "1200x720",
                  **kwargs):
         super().__init__(title = title, themename = themename, **kwargs)
 
