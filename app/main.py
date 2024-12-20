@@ -10,7 +10,7 @@ from tfidf_fn import doc_to_dict
 docs_ig = doc_to_dict("data/*.txt")
 
 # --- VSM ---
-from vsm import VectorSpaceModel
+from retrieval_models import VectorSpaceModel
 
 # pls work
 myvsm = VectorSpaceModel(docs_ig)

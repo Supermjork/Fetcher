@@ -1,5 +1,5 @@
 import ttkbootstrap as ttk
-from vsm import VectorSpaceModel
+from retrieval_models import VectorSpaceModel
 from ttkbootstrap.constants import *
 
 class IR_GUI(ttk.Window):
