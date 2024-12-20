@@ -4,6 +4,8 @@ import nltk
 import string
 import numpy as np
 from preprocessing import preprocess
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.metrics.pairwise import cosine_similarity
 
 def doc_to_dict(path: str, len_lim: int = 100_000):
     '''
@@ -33,10 +35,25 @@ def doc_processor(docs: dict[str, str]):
     preprocessed_docs = {}
 
     for doc_title, doc_content in docs.items():
-        preprocessed_docs[doc_title] = preprocess(doc_content)
+        preprocessed_docs[doc_title] = " ".join(preprocess(doc_content))
 
     return preprocessed_docs
 
+def sklearn_tfidf(docs: dict[str, str]):
+    tfidic_vectorizer = TfidfVectorizer()
+    processed_docs = doc_processor(docs)
+    return tfidic_vectorizer.fit_transform(processed_docs.values()), tfidic_vectorizer
+
+def sklearn_tfidif_query(query: str, cust_vectorizer: TfidfVectorizer):
+    return cust_vectorizer.transform([' '.join(preprocess(query))])
+
+def sklearn_cos_sim(q_vec, tfidf_mat, docs):
+    similarities = cosine_similarity(q_vec, tfidf_mat)
+
+    results = [(key, similarities[0][i]) for i, key in enumerate(docs)]
+    results.sort(key = lambda x: x[1], reverse = True)
+    print(f"results: {results[0]}")
+    return results
 
 def build_vocab(docs: dict[str, str]):
     '''
