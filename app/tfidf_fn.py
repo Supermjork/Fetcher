@@ -52,7 +52,6 @@ def sklearn_cos_sim(q_vec, tfidf_mat, docs):
 
     results = [(key, similarities[0][i]) for i, key in enumerate(docs)]
     results.sort(key = lambda x: x[1], reverse = True)
-    print(f"results: {results[0]}")
     return results
 
 def build_vocab(docs: dict[str, str]):
