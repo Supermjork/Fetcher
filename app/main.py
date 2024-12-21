@@ -7,8 +7,8 @@
 
 # --- VSM testing ---
 from tfidf_fn import doc_to_dict, doc_processor
-docs_ig = doc_to_dict("data/*.txt")
-docs_processed = doc_processor(docs_ig)
+#docs_ig = doc_to_dict("data/*.txt")
+#docs_processed = doc_processor(docs_ig)
 
 # --- VSM ---
 from retrieval_models import VectorSpaceModel, BooleanIR
@@ -21,9 +21,9 @@ from retrieval_models import VectorSpaceModel, BooleanIR
 #for i, doc_score in enumerate(top_5_v1):
 #    print(f"{i + 1}. Score of: {doc_score[1]:.3f}. Document Being: \'{doc_score[0]}\'")
 
-mybool = BooleanIR(docs_processed)
+mybool = BooleanIR("data/*.txt")
 
-result = mybool.search("computer or screen")
+result = mybool.query("(computer or screen)")
 
 print(result)
 

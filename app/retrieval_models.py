@@ -1,7 +1,9 @@
 import re
+import os
+import glob
 import tfidf_fn as idf_fns
 from preprocessing import preprocess
-from collections import Counter, OrderedDict
+from collections import Counter, OrderedDict, defaultdict
 
 class VectorSpaceModel():
     def __init__(self, documents: dict[str, str]):
@@ -15,57 +17,107 @@ class VectorSpaceModel():
         return results[:n]
 
 class BooleanIR:
-    def __init__(self, documents: dict[str, list[str]]):
-        self.documents: dict[str, list[str]] = documents
-        self.inverted_index = self._build_inverted_index()
+    def __init__(self, folder_path):
+        self.folder_path = folder_path
+        self.documents = self._load_documents()
+        self.processed_docs = self._doc_processor(self.documents)
+        self.inverted_index = self._create_inverted_index()
 
-    def _build_inverted_index(self):
-        inverted_index = {}
-        for doc_name, tokens in self.documents.items():
-            for token in tokens:
-                if token not in inverted_index:
-                    inverted_index[token] = set()
+    def _load_documents(self, len_lim: int = 100_000):
+        '''
+        Returns dictionary with: Doc_name -> Content_String
+        '''
+        name_content = {}
+
+        file_names = glob.glob(self.folder_path)
+
+        for file in file_names:
+            name = os.path.basename(file)
+            print(f"[BOOL] Now Loading: \'{name}\', into memory")
+
+            with open(file, 'r') as f:
+                if len_lim:
+                    data = f.read(len_lim)
+                else:
+                    data = f.read()
+            name_content[name] = data
+
+        return name_content
+
+    def _doc_processor(self, docs: dict[str, str]):
+        '''
+        Preprocesses documents into the specified standard
+        '''
+        preprocessed_docs = {}
+
+        for doc_title, doc_content in docs.items():
+            preprocessed_docs[doc_title] = " ".join(preprocess(doc_content))
+
+        return preprocessed_docs
+
+    def _create_inverted_index(self):
+        """Creates an inverted index from the documents."""
+        inverted_index = defaultdict(set)
+        for doc_name, content in self.processed_docs.items():
+            for token in content.split():
                 inverted_index[token].add(doc_name)
         return inverted_index
 
-    def _preprocess_query(self, query: str):
-        query = " ".join(preprocess(query, remove_stopwords = False))
-        query = re.sub(r'\b(and|or|not)\b', lambda x: x.group(0).upper(), query)  # Normalize operators
-        return query
+    def query(self, boolean_query):
+        """Processes a Boolean query and returns matching document names."""
+        tokens = re.findall(r'NOT|AND|OR|\(|\)|\w+', boolean_query.upper())
+        postfix = self._to_postfix(tokens)
+        print(f"Postfix query: {postfix}")  # Debugging output
+        return self._evaluate_postfix(postfix)
 
-    def _resolve(self, term):
-        return self.inverted_index.get(term, set())
-
-    def _evaluate_boolean_query(self, query):
-        tokens = re.findall(r'\w+|AND|OR|NOT|\(|\)', query)
+    def _to_postfix(self, tokens):
+        """Converts infix Boolean query to postfix notation using the Shunting-yard algorithm."""
+        precedence = {'NOT': 3, 'AND': 2, 'OR': 1, '(': 0, ')': 0}
+        output = []
         stack = []
-        operators = {"AND", "OR", "NOT"}
-
-        print(query)
 
         for token in tokens:
-            if token not in operators:
-                stack.append(self._resolve(token))  # Push resolved term set
-            elif token == "NOT":
-                if stack:
-                    set_to_negate = stack.pop()
-                    stack.append(set(self.documents.keys()) - set_to_negate)
-                else:
-                    raise ValueError(f"Malformed query: 'NOT' operator with no operand.")
-            elif token in {"AND", "OR"}:
-                if len(stack) < 2:
-                    raise ValueError(f"Malformed query: '{token}' operator with insufficient operands.")
-                set2 = stack.pop()
-                set1 = stack.pop()
-                if token == "AND":
-                    stack.append(set1 & set2)
-                elif token == "OR":
-                    stack.append(set1 | set2)
-        if len(stack) != 1:
-            raise ValueError("Malformed query: Remaining terms or operators after evaluation.")
-        return stack.pop()
+            if token.isalnum():
+                output.append(token)
+            elif token == '(':
+                stack.append(token)
+            elif token == ')':
+                while stack and stack[-1] != '(':
+                    output.append(stack.pop())
+                stack.pop()
+            else:  # Operator
+                while stack and precedence[token] <= precedence[stack[-1]]:
+                    output.append(stack.pop())
+                stack.append(token)
 
-    def search(self, query):
-        processed_query = self._preprocess_query(query)
-        return self._evaluate_boolean_query(processed_query)
+        while stack:
+            output.append(stack.pop())
+
+        return output
+
+    def _evaluate_postfix(self, postfix):
+        """Evaluates a postfix Boolean query and returns matching document names."""
+        stack = []
+
+        for token in postfix:
+            if token.isalnum():
+                matching_docs = self.inverted_index.get(token.lower())
+                stack.append(matching_docs)
+            elif token == 'NOT':
+                operand = stack.pop()
+                all_docs = set(self.documents.keys())
+                result = all_docs - operand
+                stack.append(result)
+            else:  # AND or OR
+                right = stack.pop()
+                left = stack.pop()
+                if token == 'AND':
+                    result = left & right
+                    stack.append(result)
+                elif token == 'OR':
+                    result = left | right
+                    stack.append(result)
+
+        final_result = stack.pop() if stack else set()
+        return final_result
 

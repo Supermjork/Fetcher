@@ -17,7 +17,7 @@ def doc_to_dict(path: str, len_lim: int = 100_000):
 
     for file in file_names:
         name = os.path.basename(file)  # Extracts the file name with dots intact
-        print(f"Now Loading: \'{name}\', into memory")
+        print(f"[VSM] Now Loading: \'{name}\', into memory")
 
         with open(file, 'r') as f:
             if len_lim:
