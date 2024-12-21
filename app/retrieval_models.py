@@ -6,15 +6,37 @@ from preprocessing import preprocess
 from collections import Counter, OrderedDict, defaultdict
 
 class VectorSpaceModel():
-    def __init__(self, documents: dict[str, str]):
-        self.docs = documents
-        self.tf_idf_scores, self.custom_vectorizer = idf_fns.sklearn_tfidf(documents)
+    def __init__(self, folder_path: str):
+        self.path = folder_path
+        self.docs = self._doc_to_dict(folder_path)
+        self.tf_idf_scores, self.custom_vectorizer = idf_fns.sklearn_tfidf(self.docs)
 
     def return_top_n(self, query: str, n: int):
         tfidf_query = idf_fns.sklearn_tfidif_query(query, self.custom_vectorizer)
         results = idf_fns.sklearn_cos_sim(tfidf_query, self.tf_idf_scores, self.docs)
 
         return results[:n]
+
+    def _doc_to_dict(self, path: str, len_lim: int = 100_000):
+        '''
+        Returns dictionary with: Doc_name -> Content_String
+        '''
+        name_content = {}
+
+        file_names = glob.glob(path)
+
+        for file in file_names:
+            name = os.path.basename(file)  # Extracts the file name with dots intact
+            print(f"[VSM] Now Loading: \'{name}\', into memory")
+
+            with open(file, 'r') as f:
+                if len_lim:
+                    data = f.read(len_lim)
+                else:
+                    data = f.read()
+            name_content[name] = data
+
+        return name_content
 
 class BooleanIR:
     def __init__(self, folder_path):
