@@ -93,6 +93,8 @@ class IR_GUI(ttk.Window):
 
             self.bool_search(self.get_query())
 
+            self.update_boxes()
+
             self.can_search()
         else:
             print("Cannot Search, Halted.")
@@ -130,3 +132,38 @@ class IR_GUI(ttk.Window):
         bool_instance = BooleanIR(self.get_path())
 
         self.set_bool_results(bool_instance.query(q))
+
+    def update_boxes(self):
+        # Update VSM Results
+        if self.get_vsm_topn():
+            vsm_content = [
+                f"{doc:<50}{similarity:>10.3f}" for doc, similarity in self.get_vsm_topn()
+            ]
+        else:
+            vsm_content = ["No results found."]
+        self.update_box(self.boxes[0], "VSM Results", vsm_content)
+
+        # Update Boolean Results
+        if self.get_bool_results():
+            bool_content = [doc for doc in self.get_bool_results()]
+        else:
+            bool_content = ["No results found."]
+        self.update_box(self.boxes[1], "Boolean Results", bool_content)
+
+        # BM25 Results (Placeholder for now)
+        bm25_content = ["BM25 Results pending implementation."]
+        self.update_box(self.boxes[2], "BM25 Results", bm25_content)
+
+    def update_box(self, box, title, content):
+        # Clear the box content
+        for widget in box.winfo_children():
+            widget.destroy()
+
+        # Add the box title
+        ttk.Label(box, text=title, anchor="center", font=("Helvetica", 12, "bold")).pack()
+
+        # Add the updated content
+        for line in content:
+            ttk.Label(box, text=line, anchor="w", justify="left", wraplength=300).pack(
+                fill=BOTH, expand=True
+            )
