@@ -1,7 +1,9 @@
 import re
 import os
 import glob
+import math
 import tfidf_fn as idf_fns
+from typing import List, Dict
 from preprocessing import preprocess
 from collections import Counter, OrderedDict, defaultdict
 
@@ -142,4 +144,89 @@ class BooleanIR:
 
         final_result = stack.pop() if stack else set()
         return final_result
+
+class BM25:
+    def __init__(self, folder_path: str, len_lim: int = 100_000):
+        self.folder_path = folder_path
+        self.len_lim = len_lim
+
+        # Load and preprocess documents
+        self.documents = self._load_documents(len_lim)
+        self.preprocessed_docs = self._doc_processor(self.documents)
+
+        # Compute document statistics
+        self.doc_lengths = {doc: len(content.split()) for doc, content in self.preprocessed_docs.items()}
+        self.avg_doc_length = sum(self.doc_lengths.values()) / len(self.doc_lengths)
+        self.inverted_index = self._build_inverted_index(self.preprocessed_docs)
+        self.doc_count = len(self.preprocessed_docs)
+
+    def _load_documents(self, len_lim: int = 100_000) -> dict[str, str]:
+        """
+        Load `.txt` files and return a dictionary mapping file names to their content.
+        """
+        name_content = {}
+        file_names = glob.glob(self.folder_path)
+
+        for file in file_names:
+            name = os.path.basename(file)
+            print(f"[BM25] Loading: '{name}' into memory")
+
+            with open(file, 'r') as f:
+                if len_lim:
+                    data = f.read(len_lim)
+                else:
+                    data = f.read()
+            name_content[name] = data
+
+        return name_content
+
+    def _doc_processor(self, docs: Dict[str, str]) -> dict[str, str]:
+        """
+        Preprocess documents to lowercase and tokenize them by splitting on whitespace.
+        """
+        def preprocess(text: str) -> list[str]:
+            return text.lower().split()
+
+        preprocessed_docs = {}
+
+        for doc_title, doc_content in docs.items():
+            preprocessed_docs[doc_title] = " ".join(preprocess(doc_content))
+
+        return preprocessed_docs
+
+    def _build_inverted_index(self, docs: dict[str, str]) -> dict[str, dict[str, int]]:
+        """
+        Build an inverted index mapping terms to document frequencies.
+        """
+        inverted_index = {}
+        for doc, content in docs.items():
+            term_freq = Counter(content.split())
+            for term, freq in term_freq.items():
+                if term not in inverted_index:
+                    inverted_index[term] = {}
+                inverted_index[term][doc] = freq
+        return inverted_index
+
+    def compute_bm25(self, query: str, k1: float = 1.5, b: float = 0.75):
+        """
+        Compute BM25 scores for the query across all documents.
+        """
+        query_terms = query.lower().split()
+        scores = {doc: 0 for doc in self.preprocessed_docs}
+
+        for term in query_terms:
+            if term in self.inverted_index:
+                doc_freq = len(self.inverted_index[term])
+                idf = math.log((self.doc_count - doc_freq + 0.5) / (doc_freq + 0.5) + 1)
+
+                for doc, freq in self.inverted_index[term].items():
+                    term_freq = freq
+                    doc_length = self.doc_lengths[doc]
+
+                    numerator = term_freq * (k1 + 1)
+                    denominator = term_freq + k1 * (1 - b + b * doc_length / self.avg_doc_length)
+
+                    scores[doc] += idf * (numerator / denominator)
+
+        return sorted(scores.items(), key=lambda item: item[1], reverse=True)
 
