@@ -34,6 +34,6 @@ from gui_ttkbs import IR_GUI
 
 app = IR_GUI(title = "Definitely Professional IR System",
              themename = "darkly",
-             size = "720x720")
+             size = "820x720")
 
 app.mainloop()
