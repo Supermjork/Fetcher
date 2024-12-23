@@ -22,7 +22,7 @@ class IR_GUI(ttk.Window):
         self.__bm25_results = None
         self.result_queue = queue.Queue()
         self.progress_queue = queue.Queue()
-        self.active_threads = []
+        self.active_threads: list[threading.Thread] = []
 
     def __setup_gui(self):
         main_container = ttk.Frame(self, padding="20")
