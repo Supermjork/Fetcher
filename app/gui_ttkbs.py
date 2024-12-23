@@ -1,14 +1,15 @@
 import ttkbootstrap as ttk
-from retrieval_models import VectorSpaceModel, BooleanIR
+from retrieval_models import VectorSpaceModel, BooleanIR, BM25
 from ttkbootstrap.constants import *
 from tkinter import filedialog
 import threading
 import queue
 
 class IR_GUI(ttk.Window):
-    def __init__(self, title: str = None, themename: str = "default", size: str = "720x480", **kwargs):
+    def __init__(self, title: str = None, themename: str = "default", size: str = "820x720", **kwargs):
         super().__init__(title=title, themename=themename, **kwargs)
         self.geometry(size)
+        self.minsize(720, 480)
         self.__setup_gui()
         self.__setup_state()
 
@@ -18,6 +19,7 @@ class IR_GUI(ttk.Window):
         self.__can_search = True
         self.__vsm_top_n = None
         self.__bool_results = None
+        self.__bm25_results = None
         self.result_queue = queue.Queue()
         self.progress_queue = queue.Queue()
         self.active_threads = []
@@ -62,9 +64,9 @@ class IR_GUI(ttk.Window):
         self.boxes = []
         self.progress_bars = {}
         models = [
-            ("Vector Space Model", 5),
+            ("Vector Space Model", 3),
             ("Boolean Model", 3),
-            ("BM25 Model", 2)
+            ("BM25 Model", 3)
         ]
 
         for name, weight in models:
@@ -111,7 +113,8 @@ class IR_GUI(ttk.Window):
         # Start search threads
         threads = [
             threading.Thread(target=self.vector_search, args=(self.get_query(),), daemon=True),
-            threading.Thread(target=self.bool_search, args=(self.get_query(),), daemon=True)
+            threading.Thread(target=self.bool_search, args=(self.get_query(),), daemon=True),
+            threading.Thread(target=self.BM25_search, args=(self.get_query(),), daemon=True)
         ]
 
         for thread in threads:
@@ -156,6 +159,19 @@ class IR_GUI(ttk.Window):
         except Exception as e:
             self.progress_queue.put(('Boolean Model', 0, f'Error: {str(e)}'))
 
+    def BM25_search(self, q: str):
+        try:
+            self.progress_queue.put(('BM25 Model', 0, 'Loading documents'))
+            bm25_instance = BM25(self.get_path())
+
+            self.progress_queue.put(('BM25 Model', 50, 'Processing query'))
+            results = bm25_instance.compute_bm25(q)
+
+            self.progress_queue.put(('BM25 Model', 100, 'Complete'))
+            self.result_queue.put(('bm25', results))
+        except Exception as e:
+            self.progress_queue.put(('BM25 Model', 0, f'Error: {str(e)}'))
+
     def monitor_progress(self):
         while True:
             try:
@@ -173,6 +189,8 @@ class IR_GUI(ttk.Window):
                 self.__vsm_top_n = results
             elif result_type == 'bool':
                 self.__bool_results = results
+            elif result_type == 'bm25':
+                self.__bm25_results = results
 
         # Update VSM Results
         vsm_content = [f"{doc:<50}{similarity:>10.3f}" for doc, similarity in (self.__vsm_top_n or [])] or ["No results found."]
@@ -183,7 +201,8 @@ class IR_GUI(ttk.Window):
         self.update_box(self.boxes[1], "Boolean Results", bool_content)
 
         # BM25 Results
-        self.update_box(self.boxes[2], "BM25 Results", ["BM25 Results pending implementation."])
+        b25_content = [f"{doc:<50}{prob:>10.3f}" for doc, prob in (self.__bm25_results or [])] or ["No results found."]
+        self.update_box(self.boxes[2], "BM25 Results", b25_content)
 
     def update_box(self, box, title, content):
         for widget in box.winfo_children():
