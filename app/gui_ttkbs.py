@@ -253,18 +253,18 @@ class IR_GUI(ttk.Window):
                 self.__bm25_results = results
 
         # Update VSM Results
-        vsm_content = [f"{doc:<50}{similarity:>10.3f}" for doc, similarity in (self.__vsm_top_n or [])] or ["No results found."]
-        self.update_box(self.boxes[0], "VSM Results", vsm_content)
+        vsm_content = self.__vsm_top_n or []
+        self.update_box(self.boxes[0], "VSM Results", vsm_content, has_score=True)
 
         # Update Boolean Results
-        bool_content = [doc for doc in (self.__bool_results or [])] or ["No results found."]
-        self.update_box(self.boxes[1], "Boolean Results", bool_content)
+        bool_content = [(doc, 1.0) for doc in (self.__bool_results or [])]
+        self.update_box(self.boxes[1], "Boolean Results", bool_content, has_score=False)
 
         # BM25 Results
-        b25_content = [f"{doc:<50}{prob:>10.3f}" for doc, prob in (self.__bm25_results or [])] or ["No results found."]
-        self.update_box(self.boxes[2], "BM25 Results", b25_content)
+        bm25_content = self.__bm25_results or []
+        self.update_box(self.boxes[2], "BM25 Results", bm25_content, has_score=True)
 
-    def update_box(self, box, title, content):
+    def update_box(self, box, title, content, has_score=True):
         for widget in box.winfo_children():
             widget.destroy()
 
@@ -282,30 +282,35 @@ class IR_GUI(ttk.Window):
         text.tag_configure("instruction", foreground="gray")
         text.insert(END, "Click 📊 to view visualizations\n\n", "instruction")
 
-        for line in content:
-            if isinstance(line, tuple):
-                doc_name, score = line
-                frame = ttk.Frame(text)
-                text.window_create(END, window=frame)
+        if not content:
+            text.insert(END, "No results found.")
+        else:
+            for item in content:
+                if isinstance(item, tuple):
+                    doc_name, score = item
+                    frame = ttk.Frame(text)
+                    text.window_create(END, window=frame)
 
-                doc_label = ttk.Label(frame, text=f"{doc_name[:25]}...", font=("Helvetica", 9))
-                doc_label.pack(side=LEFT)
+                    # Document name (truncated if too long)
+                    doc_label = ttk.Label(frame, text=f"{doc_name[:25]}...", font=("Helvetica", 9))
+                    doc_label.pack(side=LEFT)
 
-                score_label = ttk.Label(frame, text=f"{score:.3f}", bootstyle="success")
-                score_label.pack(side=LEFT, padx=5)
+                    # Score (if applicable)
+                    if has_score:
+                        score_label = ttk.Label(frame, text=f"{score:.3f}", bootstyle="success")
+                        score_label.pack(side=LEFT, padx=5)
 
-                # Make visualization button more visible
-                viz_btn = self.create_doc_menu(doc_name, frame)
-                viz_btn.configure(text="📊 Visualize", bootstyle="info-outline")
-                viz_btn.pack(side=BOTTOM)
+                    # Visualization button
+                    viz_btn = ttk.Button(frame, text="📊", 
+                                       command=lambda d=doc_name: self.create_doc_menu(d, frame),
+                                       bootstyle="info-outline")
+                    viz_btn.pack(side=RIGHT, padx=2)
 
-                text.insert(END, '\n')
-            else:
-                text.insert(END, f"{line}\n")
+                    text.insert(END, '\n')
+                else:
+                    text.insert(END, f"{item}\n")
 
         text.configure(state=DISABLED)
-
-
 
     def get_query(self):
         return self.__user_query
@@ -316,11 +321,8 @@ class IR_GUI(ttk.Window):
     def cannot_search(self):
         self.__can_search = False
 
-    def create_doc_menu(self, doc_name, box):
-        menu_btn = ttk.Menubutton(box, text="📊", bootstyle="info-outline")
-        menu = ttk.Menu(menu_btn)
-        menu_btn['menu'] = menu
-
+    def create_doc_menu(self, doc_name, parent):
+        menu = ttk.Menu(parent)
         menu.add_command(label="Word Cloud", 
                         command=lambda: self.show_wordcloud(doc_name))
         menu.add_command(label="Word Frequency", 
@@ -328,7 +330,11 @@ class IR_GUI(ttk.Window):
         menu.add_command(label="Query Similarity", 
                         command=lambda: self.show_similarity(doc_name))
 
-        return menu_btn
+        # Show the menu at the current mouse position
+        try:
+            menu.tk_popup(parent.winfo_pointerx(), parent.winfo_pointery())
+        finally:
+            menu.grab_release()
 
     def show_wordcloud(self, doc_name):
         with open(f"{os.path.dirname(self.get_path())}/{doc_name}", 'r') as f:
@@ -339,18 +345,31 @@ class IR_GUI(ttk.Window):
 
         self.show_plot_window("Word Cloud", wordcloud)
 
-    def show_frequency(self, doc_name):
-        with open(f"{os.path.dirname(self.get_path())}/{doc_name}", 'r') as f:
-            text = f.read()
+    def show_frequency(self, doc_name, len_lim: int = 100_000):
+        try:
+            with open(f"{os.path.dirname(self.get_path())}/{doc_name}", 'r') as f:
+                if len_lim:
+                    text = f.read(len_lim)
+                else:
+                    text = f.read()
 
-        words = preprocess(text)
-        freq = Counter(words).most_common(20)
+                word_freq = {}
+                text_preprocessed = preprocess(text)
+                for word in text_preprocessed:
+                    word_freq[word] = word_freq.get(word, 0) + 1
 
-        df = pd.DataFrame(freq, columns=['Word', 'Frequency'])
-        fig, ax = plt.subplots(figsize=(10, 6))
-        sns.barplot(data=df, x='Frequency', y='Word', ax=ax)
+            # Get top 20 words
+            top_words = sorted(word_freq.items(), key=lambda x: x[1], reverse=True)[:20]
+            df = pd.DataFrame(top_words, columns=['Word', 'Frequency'])
 
-        self.show_plot_window("Word Frequency", fig)
+            fig, ax = plt.subplots(figsize=(10, 6))
+            sns.barplot(data=df, x='Frequency', y='Word', ax=ax)
+            plt.tight_layout()
+
+            self.show_plot_window("Word Frequency", fig)
+
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to generate word frequency: {str(e)}")
 
     def show_similarity(self, doc_name):
         if not self.__user_query:
@@ -359,7 +378,7 @@ class IR_GUI(ttk.Window):
             return
 
         # Get similarity score from VSM results
-        score = next((score for doc, score in self.__vsm_top_n 
+        score = next((score for doc, score in self.__bm25_results 
                     if doc == doc_name), 0)
 
         fig, ax = plt.subplots(figsize=(6, 3))
@@ -373,6 +392,13 @@ class IR_GUI(ttk.Window):
         window.title(title)
         window.geometry("800x600")
 
+        # Handle window closing
+        def on_closing():
+            plt.close('all')  # Close all matplotlib figures
+            window.destroy()  # Destroy the window
+
+        window.protocol("WM_DELETE_WINDOW", on_closing)
+
         toolbar_frame = ttk.Frame(window)
         toolbar_frame.pack(fill=X)
 
@@ -385,20 +411,9 @@ class IR_GUI(ttk.Window):
             fig, ax = plt.subplots(figsize=(10, 6))
             ax.imshow(plot_obj)
             ax.axis('off')
+        else:
+            fig = plot_obj  # For pre-created figures
 
         canvas = FigureCanvasTkAgg(fig, master=window)
         canvas.draw()
         canvas.get_tk_widget().pack(fill=BOTH, expand=True)
-
-    def save_plot(self, plot_obj):
-        try:
-            file_path = filedialog.asksaveasfilename(
-                defaultextension=".png",
-                filetypes=[("PNG files", "*.png"), 
-                          ("All files", "*.*")]
-            )
-            if file_path:
-                plt.savefig(file_path)
-                messagebox.showinfo("Success", "Plot saved successfully")
-        except Exception as e:
-            messagebox.showerror("Error", f"Failed to save plot: {str(e)}")
